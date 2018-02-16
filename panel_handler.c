@@ -1,57 +1,101 @@
 #include "panel_handler.h"
 #define PRINTOUT 1
-void panel_print(int printout[N_BUTTONTYPES][N_FLOORS]){
-	
-	printf("\tDOWN\tUP\t\tFLOOR\n");
-	for(int i = N_BUTTONTYPES; i >= 0; i--){
-		printf("|\t%i\t%i\t|\n",printout[BUTTON_CALL_DOWN][i],printout[BUTTON_CALL_UP][i]);
-	}
-	printf("####################################\nCOMMAND\t%i\t%i\t%i\t%i\n",printout[BUTTON_COMMAND][0],printout[BUTTON_COMMAND][1],printout[BUTTON_COMMAND][2],printout[BUTTON_COMMAND][3]);	
-}
+#if PRINTOUT
+struct elevator_data is_updated;
+#endif
 
-int panel_get(int orders[N_BUTTONTYPES][N_FLOORS]){
-	int pressed = 0;
-	for(int floor = 0; floor < N_FLOORS; floor++){
-		if(elev_get_button_signal(BUTTON_COMMAND,floor) && !orders[BUTTON_COMMAND][floor]){
-			orders[BUTTON_COMMAND][floor] = 1;
-			pressed = 1;
-		}
-	}
-	for(int floor = 0; floor < N_FLOORS-1; floor++){
-		if(elev_get_button_signal(BUTTON_CALL_DOWN,floor+1) && !orders[BUTTON_CALL_DOWN][floor+1]){
-			orders[BUTTON_CALL_DOWN][floor+1] = 1;
-			pressed = 1;
-		}
-		if(elev_get_button_signal(BUTTON_CALL_UP,floor) && !orders[BUTTON_CALL_UP][floor]){
-			orders[BUTTON_CALL_UP][floor] = 1;
-			pressed = 1;
-		}
-	}
-	if(pressed){
-		
-		panel_set_lights(orders);
+
+int panel_get(struct elevator_data * inputmap){
+	
+	inputmap->floor = elev_get_floor_sensor_signal();
+	inputmap->stop = elev_get_stop_signal();
+	if(inputmap->stop){		
 		return 1;
 	}
-	return 0;
-}
 
-void panel_set_lights(int orders[N_BUTTONTYPES][N_FLOORS]){
+	int pressed = 0;//IS THIS NEEDED?
 	for(int floor = 0; floor < N_FLOORS; floor++){
-		elev_set_button_lamp(BUTTON_COMMAND,floor,orders[BUTTON_COMMAND][floor]);
+		if(elev_get_button_signal(BUTTON_COMMAND,floor) && !inputmap->orders[BUTTON_COMMAND][floor]){
+			inputmap->orders[BUTTON_COMMAND][floor] = 1;
+			pressed = 1;
+		}
 	}
 	for(int floor = 0; floor < N_FLOORS-1; floor++){
-		elev_set_button_lamp(BUTTON_CALL_DOWN,floor+1,orders[BUTTON_CALL_DOWN][floor+1]);
-		elev_set_button_lamp(BUTTON_CALL_UP,floor,orders[BUTTON_CALL_UP][floor]);
+		if(elev_get_button_signal(BUTTON_CALL_DOWN,floor+1) && !inputmap->orders[BUTTON_CALL_DOWN][floor+1]){
+			inputmap->orders[BUTTON_CALL_DOWN][floor+1] = 1;
+			pressed = 1;
+		}
+		if(elev_get_button_signal(BUTTON_CALL_UP,floor) && !inputmap->orders[BUTTON_CALL_UP][floor]){
+			inputmap->orders[BUTTON_CALL_UP][floor] = 1;
+			pressed = 1;
+		}
 	}
+	return pressed;
+}
+
+void panel_set_lights(struct elevator_data inputmap){
+	if(inputmap.floor >= 0 && inputmap.floor < N_FLOORS){
+		elev_set_floor_indicator(inputmap.floor);
+	}
+	elev_set_stop_lamp(inputmap.stop);
+	for(int floor = 0; floor < N_FLOORS; floor++){
+		elev_set_button_lamp(BUTTON_COMMAND,floor,inputmap.orders[BUTTON_COMMAND][floor]);
+	}
+	for(int floor = 0; floor < N_FLOORS-1; floor++){
+		elev_set_button_lamp(BUTTON_CALL_DOWN,floor+1,inputmap.orders[BUTTON_CALL_DOWN][floor+1]);
+		elev_set_button_lamp(BUTTON_CALL_UP,floor,inputmap.orders[BUTTON_CALL_UP][floor]);
+	}
+	
+
+
+
+
+
+
+
 	#if PRINTOUT
-	panel_print(orders);
-	printf("LYS SATT\n");
+	int updatelights = 0;
+	for(int type = 0; type < N_BUTTONTYPES; type++){
+		for(int floor = 0; floor < N_FLOORS; floor++){
+			if(is_updated.orders[type][floor] != inputmap.orders[type][floor]){
+				is_updated.orders[type][floor] = inputmap.orders[type][floor];
+				updatelights = 1;
+			}
+		}
+	}
+	if(is_updated.stop != inputmap.stop){
+		is_updated.stop = inputmap.stop;
+		updatelights = 1;	
+	}
+	if(is_updated.floor != inputmap.floor){
+		is_updated.floor = inputmap.floor;
+		updatelights = 1;
+	}
+	if(updatelights){	
+		panel_print(inputmap);
+	}
 	#endif
 }
 
 
-int test(void){
-	printf("TEST 2");
-	return 0;
+#if PRINTOUT
+
+
+void panel_print(struct elevator_data inputmap){
+	printf("#########################################\n");
+	printf("|\tDOWN\tUP\t\tFLOOR\t|\n");
+	printf("#########################################\n");
+	for(int i = N_BUTTONTYPES; i >= 0; i--){
+		printf("|\t%i\t%i\t|\t",inputmap.orders[BUTTON_CALL_DOWN][i],inputmap.orders[BUTTON_CALL_UP][i]);
+		if(inputmap.floor >= 0 && inputmap.floor < N_FLOORS){
+			printf("%i\t|\n",(inputmap.floor + 1));
+		}else{
+			printf("\t|\n");		
+		}
+	}
+	printf("#########################################\n");
+	printf("COMMAND\t%i\t%i\t%i\t%i\n",inputmap.orders[BUTTON_COMMAND][0],inputmap.orders[BUTTON_COMMAND][1],inputmap.orders[BUTTON_COMMAND][2],inputmap.orders[BUTTON_COMMAND][3]);
+	printf("STOP:\t%i\t\n",inputmap.stop);
 }
+#endif
 
